@@ -45,6 +45,25 @@ where
     team-data-engineering.pt_core.gcr_manual_exclude_subs
 )
 
+,manual_customer_list as ( 
+  select  
+    * 
+  from 
+    `wati-analytics-prod.gs_wati.gcr_partnership_china_customer_list_manual`
+  where 
+    revops_approval is true
+    AND NOT ( 
+      mrr_month IS NULL OR 
+      customer_id IS NULL OR 
+      customer_email IS NULL OR 
+      is_affiliate IS NULL OR 
+      partner_owner IS NULL OR 
+      partner_email IS NULL OR 
+      deal_won_date IS NULL OR 
+       revops_approval IS NULL
+    )
+)
+
 -- ,hb_deals as (
 --   select
 --     *
@@ -134,9 +153,14 @@ where
     case
       when t1.partner_owner in ('Felix Chau','James Chan') then 'Farida Chan'
       when t1.partner_owner is null and manual.referral_subscription_id is not null then manual.partner_owner
+      when t1.partner_owner is null and cust.customer_id is not null then cust.partner_owner
       else t1.partner_owner
     end as partner_owner_adjusted,
-    case  when t1.partner_owner is null and manual.referral_subscription_id is not null then 'Managed Partner' else t1.partner_type end as partner_filter_channel_adjusted,
+    case  
+      when t1.partner_owner is null and manual.referral_subscription_id is not null then 'Managed Partner' 
+      when t1.partner_owner is null and cust.customer_id is not null then 'Managed Partner' 
+      else t1.partner_type 
+      end as partner_filter_channel_adjusted,
 
     ob.subscription_wati_db_name,
     coalesce(md.new_mrr_impact, t1.mrr_impact) mrr_impact,
@@ -166,6 +190,10 @@ where
   left join
     `team-data-engineering.pt_core.gcr_key_metrics_partner_manual_attribution` as manual
     on t1.subscription_id = manual.referral_subscription_id and manual.partner_type = 'Managed Affiliate'
+  left join 
+    manual_customer_list as cust 
+    on t1.customer_id = cust.customer_id 
+    and t1.mrr_month = cust.mrr_month
   left join
     manual_exclude_subs mes
     on mes.mrr_month = t1.mrr_month
